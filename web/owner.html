@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>車主介面｜車輛履歷系統</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>車主介面</h1>
+  <p>自持 PQC 金鑰：私鑰只存在這個瀏覽器，Gateway 只看得到公鑰與簽章（FFR2、plan_dApp.md D1／D3）</p>
+</header>
+<main>
+
+  <div class="card">
+    <h2>① 我的 PQC 錢包（BFR5）</h2>
+    <p class="muted">車主身分以化名雜湊表示（NFR1，鏈上不存明文個資）。金鑰在本機產生並存於瀏覽器 IndexedDB，
+      第一次登記會附上「持有證明」簽章；換鑰須由舊私鑰簽章授權。私鑰遺失時請至監理站臨櫃核對身分後強制重綁。</p>
+    <label for="owner-identity">車主識別碼（化名雜湊）</label>
+    <input id="owner-identity" placeholder="例如：owner-hash-demo1" />
+    <div class="button-row">
+      <button id="btn-wallet-status" class="secondary">查看錢包狀態</button>
+      <button id="btn-register-key">在本機產生金鑰並登記上鏈</button>
+    </div>
+    <div id="register-key-result"></div>
+
+    <h3>加密備份（換電腦時使用）</h3>
+    <label for="backup-password">備份密碼（至少 8 個字元）</label>
+    <input id="backup-password" type="password" autocomplete="new-password" />
+    <div class="button-row">
+      <button id="btn-export-backup" class="secondary">匯出加密備份檔</button>
+      <label class="file-button secondary">匯入備份檔<input id="backup-file" type="file" accept="application/json,.json" hidden /></label>
+    </div>
+    <div id="backup-result"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 簽署保養授權（FFR2）</h2>
+    <p class="muted">在瀏覽器內用自己的私鑰簽署本次保養內容，將簽章交給維修廠（SVC）送出交易。</p>
+    <label for="maint-vin">VIN</label>
+    <input id="maint-vin" placeholder="車輛識別碼" />
+    <label for="maint-service-type">服務類型</label>
+    <input id="maint-service-type" placeholder="例如：OIL_CHANGE" />
+    <label for="maint-mileage">里程（公里）</label>
+    <input id="maint-mileage" type="number" min="0" />
+    <label for="maint-description">說明</label>
+    <input id="maint-description" placeholder="例如：更換機油與濾芯" />
+    <div class="button-row">
+      <button id="btn-authorize-maintenance">在本機簽署授權</button>
+      <button id="btn-submit-maintenance" class="secondary" disabled>展示用：模擬維修廠送出上鏈</button>
+    </div>
+    <div id="authorize-result"></div>
+  </div>
+
+  <div class="card">
+    <h2>③ 產生買家查詢授權 QR Code（UC-02 前置條件）</h2>
+    <p class="muted">VIN + 有效期限 + 車主簽章，全部在瀏覽器內完成。買家掃描後會用鏈上公鑰自行驗證（D2）。</p>
+    <label for="qr-vin">VIN</label>
+    <input id="qr-vin" placeholder="車輛識別碼" />
+    <label for="qr-minutes">有效時間（分鐘）</label>
+    <input id="qr-minutes" type="number" min="1" value="10" />
+    <button id="btn-generate-qr">產生 QR Code</button>
+    <canvas id="qr-canvas"></canvas>
+    <div id="qr-result"></div>
+  </div>
+
+  <div class="card">
+    <h2>④ 我的車輛履歷與即時通知（FFR1、UC-01）</h2>
+    <p class="muted">開始追蹤後，這台車一有保養、理賠、複檢或<strong>異常扣分</strong>，數秒內就會在下方跳出通知（鏈上事件即時推播）。</p>
+    <label for="history-vin">VIN</label>
+    <input id="history-vin" placeholder="車輛識別碼" />
+    <div class="button-row">
+      <button id="btn-load-history" class="secondary">查詢履歷</button>
+      <button id="btn-watch">開始即時追蹤</button>
+    </div>
+    <div id="watch-status" class="muted"></div>
+    <ul id="notifications" class="notification-list"></ul>
+    <div id="history-result"></div>
+  </div>
+
+</main>
+<script src="api.js"></script>
+<script type="module">
+import { toCanvas } from './vendor/qrcode-1.5.3.js';
+import { maintenanceAuthorizationMessage, queryAuthorizationMessage } from './shared/authMessages.js';
+import { buildRegistrationProof, decryptBackup, encryptBackup } from './walletCrypto.js';
+import { loadKey, newKeyRecord, saveKey, signAs } from './wallet.js';
+
+const $ = (id) => document.getElementById(id);
+
+function showError(el, err) {
+  el.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+}
+
+function showResult(el, html) {
+  el.innerHTML = `<div class="result-box">${html}</div>`;
+}
+
+function requireIdentity() {
+  const identity = $('owner-identity').value.trim();
+  if (!identity) throw new Error('請先在 ① 輸入車主識別碼');
+  return identity;
+}
+
+$('btn-wallet-status').addEventListener('click', async () => {
+  const out = $('register-key-result');
+  try {
+    const identity = requireIdentity();
+    const [local, onChain] = await Promise.all([loadKey(identity), api.getOnChainPQCKey(identity)]);
+    const localText = local ? `本機有私鑰（公鑰 ${escapeHtml(local.publicKeyHex.slice(0, 16))}…）` : '本機沒有私鑰';
+    const chainText = onChain
+      ? `鏈上公鑰第 ${onChain.version} 版（${escapeHtml(onChain.publicKeyHex.slice(0, 16))}…，登記於 ${escapeHtml(onChain.registeredAt)}）`
+      : '鏈上尚未登記';
+    const isMatched = local && onChain && local.publicKeyHex === onChain.publicKeyHex;
+    showResult(out, `${localText}<br>${chainText}<br>${isMatched ? '✅ 本機私鑰與鏈上公鑰一致，可以簽章' : '⚠ 本機私鑰與鏈上公鑰不一致或缺少其一'}`);
+  } catch (err) { showError(out, err); }
+});
+
+// 第一次登記與換鑰共用：鏈上沒有公鑰 → 持有證明；已有 → 用本機舊私鑰簽換鑰授權。
+// 上鏈成功後才寫入本機錢包，避免本機與鏈上不一致。
+$('btn-register-key').addEventListener('click', async () => {
+  const out = $('register-key-result');
+  try {
+    const identity = requireIdentity();
+    const [current, onChain] = await Promise.all([loadKey(identity), api.getOnChainPQCKey(identity)]);
+    const next = newKeyRecord(identity);
+    const proofSignatureHex = buildRegistrationProof(identity, next, onChain, current);
+    const { elapsedMs } = await api.registerSelfCustodyKey(identity, {
+      publicKeyHex: next.publicKeyHex,
+      proofSignatureHex,
+    });
+    await saveKey(next);
+    showResult(out, `${onChain ? '已完成換鑰' : '已登記'}：公鑰 ${escapeHtml(next.publicKeyHex.slice(0, 40))}…
+<span class="elapsed">（${elapsedMs} ms；私鑰只存在這個瀏覽器，請記得匯出加密備份）</span>`);
+  } catch (err) { showError(out, err); }
+});
+
+$('btn-export-backup').addEventListener('click', async () => {
+  const out = $('backup-result');
+  try {
+    const identity = requireIdentity();
+    const record = await loadKey(identity);
+    if (!record) throw new Error('此瀏覽器沒有這個身分的私鑰可以匯出');
+    const backupText = await encryptBackup(record, $('backup-password').value);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([backupText], { type: 'application/json' }));
+    link.download = `vehiclenet-wallet-${identity}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showResult(out, '已下載加密備份檔（AES-256-GCM，金鑰由密碼經 PBKDF2 導出）。請妥善保存檔案與密碼。');
+  } catch (err) { showError(out, err); }
+});
+
+$('backup-file').addEventListener('change', async (ev) => {
+  const out = $('backup-result');
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  try {
+    const record = await decryptBackup(await file.text(), $('backup-password').value);
+    await saveKey(record);
+    $('owner-identity').value = record.identity;
+    showResult(out, `已匯入身分 ${escapeHtml(record.identity)} 的私鑰，可按「查看錢包狀態」確認與鏈上公鑰一致。`);
+  } catch (err) { showError(out, err); }
+});
+
+let pendingMaintenance = null;
+
+$('btn-authorize-maintenance').addEventListener('click', async () => {
+  const out = $('authorize-result');
+  $('btn-submit-maintenance').disabled = true;
+  try {
+    const identity = requireIdentity();
+    const vin = $('maint-vin').value.trim();
+    const serviceType = $('maint-service-type').value.trim();
+    const mileage = Number($('maint-mileage').value);
+    const description = $('maint-description').value.trim();
+    if (!vin || !serviceType || !description || $('maint-mileage').value === '' || Number.isNaN(mileage)) {
+      throw new Error('請完整填寫 VIN、服務類型、里程與說明');
+    }
+    const ownerSignatureHex = await signAs(identity, maintenanceAuthorizationMessage(vin, serviceType, mileage, description));
+    pendingMaintenance = { vin, serviceType, mileage, description, ownerSignatureHex };
+    $('btn-submit-maintenance').disabled = false;
+    showResult(out, `授權簽章（已在本機簽署，請提供給維修廠）：
+${escapeHtml(ownerSignatureHex.slice(0, 96))}…（共 ${ownerSignatureHex.length / 2} bytes）`);
+  } catch (err) { showError(out, err); }
+});
+
+// 展示用：真實情境是維修廠收到簽章後以 SVC 身分送出；這裡直接呼叫同一支 API 以便單人展示。
+$('btn-submit-maintenance').addEventListener('click', async () => {
+  const out = $('authorize-result');
+  if (!pendingMaintenance) return;
+  try {
+    const { vin, ...body } = pendingMaintenance;
+    const { elapsedMs } = await api.submitMaintenance(vin, body);
+    showResult(out, `維修廠已送出，保養紀錄上鏈成功 <span class="elapsed">（${elapsedMs} ms）</span>`);
+    pendingMaintenance = null;
+    $('btn-submit-maintenance').disabled = true;
+  } catch (err) { showError(out, err); }
+});
+
+$('btn-generate-qr').addEventListener('click', async () => {
+  const out = $('qr-result');
+  try {
+    const identity = requireIdentity();
+    const vin = $('qr-vin').value.trim();
+    if (!vin) throw new Error('請輸入 VIN');
+    const validMinutes = Number($('qr-minutes').value) || 10;
+    const expiresAt = new Date(Date.now() + validMinutes * 60_000).toISOString();
+    const signatureHex = await signAs(identity, queryAuthorizationMessage(vin, expiresAt));
+    const authorization = { vin, ownerIdentity: identity, expiresAt, signatureHex };
+    // ML-DSA-65 簽章約 3.3 KB，超過 QR Code 容量上限，QR 只放內容定址 ID（授權的 SHA-256），
+    // 完整授權交給 Gateway 暫存；買家取回後自行重算雜湊並驗章，Gateway 無法竄改。
+    const { data } = await api.storeQueryAuthorization(authorization);
+    const buyerUrl = `${window.location.origin}/buyer.html#auth=${data.id}`;
+    await toCanvas($('qr-canvas'), buyerUrl, { width: 240 });
+    showResult(out, `買家掃描 QR Code 即開啟：<a href="${escapeHtml(buyerUrl)}" target="_blank">${escapeHtml(buyerUrl.slice(0, 60))}…</a>
+<br>也可以把完整授權內容直接貼給買家：
+<textarea readonly rows="3">${escapeHtml(JSON.stringify(authorization))}</textarea>
+<span class="elapsed">有效至 ${escapeHtml(expiresAt)}</span>`);
+  } catch (err) { showError(out, err); }
+});
+
+$('btn-load-history').addEventListener('click', () => loadHistory().catch((err) => showError($('history-result'), err)));
+
+async function loadHistory() {
+  const vin = $('history-vin').value.trim();
+  if (!vin) throw new Error('請輸入 VIN');
+  const [{ data: summary, elapsedMs: t1 }, { data: history, elapsedMs: t2 }] = await Promise.all([
+    api.getSummary(vin), api.getHistory(vin),
+  ]);
+  $('history-result').innerHTML = `<p>誠信分數：<strong>${summary.integrityScore}</strong>　殘值：<strong>${summary.residualValue.toLocaleString()}</strong>　狀態：${escapeHtml(summary.status)}
+<span class="elapsed">（${t1 + t2} ms）</span></p>${renderHistoryTable(history)}`;
+}
+
+// plan_dApp.md D3：以 EventSource 訂閱 Gateway 的 SSE 端點，鏈上事件一提交就推播到這裡。
+let vehicleStream = null;
+let keyStream = null;
+
+function addNotification(html, isAnomaly) {
+  const item = document.createElement('li');
+  item.className = isAnomaly ? 'notification notification-anomaly' : 'notification';
+  item.innerHTML = `<span class="elapsed">${new Date().toLocaleTimeString()}</span> ${html}`;
+  $('notifications').prepend(item);
+}
+
+function describeVehicleEvent(message) {
+  const p = message.payload;
+  const label = EVENT_TYPE_LABELS[p.eventType] || p.eventType;
+  const base = `你的車 ${escapeHtml(p.vin)} 剛被新增「${escapeHtml(label)}」紀錄（${escapeHtml(p.submittingOrg)}，區塊 #${escapeHtml(message.blockNumber)}）`;
+  if (!p.anomalies || p.anomalies.length === 0) {
+    return { html: `${base}，目前誠信分數 ${p.integrityScore}`, isAnomaly: false };
+  }
+  const details = p.anomalies
+    .map((a) => `${escapeHtml(a.anomalyType)} 扣 ${Math.abs(a.scoreDelta)} 分（${escapeHtml(a.description)}）`)
+    .join('；');
+  return { html: `⚠ 異常扣分！${base}：${details}，誠信分數降為 ${p.integrityScore}`, isAnomaly: true };
+}
+
+$('btn-watch').addEventListener('click', () => {
+  const vin = $('history-vin').value.trim();
+  const status = $('watch-status');
+  if (!vin) { status.textContent = '請輸入 VIN'; return; }
+  vehicleStream?.close();
+  keyStream?.close();
+
+  vehicleStream = new EventSource(api.vehicleEventsUrl(vin));
+  vehicleStream.onopen = () => { status.textContent = `🟢 正在即時追蹤 ${vin}`; };
+  vehicleStream.onerror = () => { status.textContent = '🟡 連線中斷，瀏覽器會自動重新連線…'; };
+  vehicleStream.addEventListener('VehicleEvent', (ev) => {
+    const { html, isAnomaly } = describeVehicleEvent(JSON.parse(ev.data));
+    addNotification(html, isAnomaly);
+    loadHistory().catch(() => {});
+  });
+
+  const identity = $('owner-identity').value.trim();
+  if (identity) {
+    keyStream = new EventSource(api.pqcKeyEventsUrl(identity));
+    keyStream.addEventListener('PQCKeyEvent', (ev) => {
+      const p = JSON.parse(ev.data).payload;
+      const isForced = p.action === 'FORCE_REBIND';
+      addNotification(
+        `${isForced ? '⚠ 你的 PQC 金鑰已被監理站強制重綁' : '你的 PQC 金鑰已更新'}（第 ${p.version} 版，${escapeHtml(p.submittingOrg)}${p.reason ? `，原因：${escapeHtml(p.reason)}` : ''}）`,
+        isForced,
+      );
+    });
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "vehiclenet-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "車輛履歷系統 Fabric Gateway REST API（Node.js/TypeScript），對應 plan.md 階段 3／5。ESM：@noble/post-quantum 僅提供 ESM 套件。",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@hyperledger/fabric-gateway": "^1.12.1",
+    "@noble/post-quantum": "^0.7.1",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

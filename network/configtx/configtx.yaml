@@ -1,0 +1,216 @@
+# 五組織聯盟鏈（REG／OEM／SVC／INS／APP）的 channel 設定範本。
+# 改編自 fabric-samples/test-network/configtx/configtx.yaml，擴充為五個業務組織
+# 與 3 節點 Raft 排序服務。各交易類型的背書策略（plan.md §3.3）於鏈碼定義提交時
+# 以 --signature-policy 指定，不在此處的 Application 預設策略中設定。
+
+---
+Organizations:
+  - &OrdererOrg
+    Name: OrdererOrg
+    ID: OrdererMSP
+    MSPDir: ../organizations/ordererOrganizations/vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+    OrdererEndpoints:
+      - orderer1.vehiclenet.tw:7050
+      - orderer2.vehiclenet.tw:8050
+      - orderer3.vehiclenet.tw:9050
+
+  - &REG
+    Name: REGMSP
+    ID: REGMSP
+    MSPDir: ../organizations/peerOrganizations/reg.vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('REGMSP.admin', 'REGMSP.peer', 'REGMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('REGMSP.admin', 'REGMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('REGMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('REGMSP.peer')"
+
+  - &OEM
+    Name: OEMMSP
+    ID: OEMMSP
+    MSPDir: ../organizations/peerOrganizations/oem.vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OEMMSP.admin', 'OEMMSP.peer', 'OEMMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OEMMSP.admin', 'OEMMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OEMMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('OEMMSP.peer')"
+
+  - &SVC
+    Name: SVCMSP
+    ID: SVCMSP
+    MSPDir: ../organizations/peerOrganizations/svc.vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('SVCMSP.admin', 'SVCMSP.peer', 'SVCMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('SVCMSP.admin', 'SVCMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('SVCMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('SVCMSP.peer')"
+
+  - &INS
+    Name: INSMSP
+    ID: INSMSP
+    MSPDir: ../organizations/peerOrganizations/ins.vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('INSMSP.admin', 'INSMSP.peer', 'INSMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('INSMSP.admin', 'INSMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('INSMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('INSMSP.peer')"
+
+  - &APP
+    Name: APPMSP
+    ID: APPMSP
+    MSPDir: ../organizations/peerOrganizations/app.vehiclenet.tw/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('APPMSP.admin', 'APPMSP.peer', 'APPMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('APPMSP.admin', 'APPMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('APPMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('APPMSP.peer')"
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_5: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  Addresses:
+    - orderer1.vehiclenet.tw:7050
+    - orderer2.vehiclenet.tw:8050
+    - orderer3.vehiclenet.tw:9050
+  EtcdRaft:
+    Consenters:
+      - Host: orderer1.vehiclenet.tw
+        Port: 7050
+        ClientTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer1.vehiclenet.tw/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer1.vehiclenet.tw/tls/server.crt
+      - Host: orderer2.vehiclenet.tw
+        Port: 8050
+        ClientTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer2.vehiclenet.tw/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer2.vehiclenet.tw/tls/server.crt
+      - Host: orderer3.vehiclenet.tw
+        Port: 9050
+        ClientTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer3.vehiclenet.tw/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/vehiclenet.tw/orderers/orderer3.vehiclenet.tw/tls/server.crt
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  VehicleNetChannel:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities: *OrdererCapabilities
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *REG
+        - *OEM
+        - *SVC
+        - *INS
+        - *APP
+      Capabilities: *ApplicationCapabilities

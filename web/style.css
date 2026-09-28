@@ -1,0 +1,141 @@
+/* 共用樣式（三種角色介面），簡單、無框架依賴，對應 plan.md §5 階段 5。 */
+:root {
+  --color-bg: #f7f7f9;
+  --color-card: #ffffff;
+  --color-border: #d9dce1;
+  --color-text: #1f2328;
+  --color-muted: #6b7280;
+  --color-primary: #1f6feb;
+  --color-danger: #d1242f;
+  --color-danger-bg: #fff1f0;
+  --color-success: #1a7f37;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+header {
+  background: var(--color-primary);
+  color: #fff;
+  padding: 1rem 1.5rem;
+}
+header h1 { margin: 0; font-size: 1.25rem; }
+header p { margin: 0.25rem 0 0; opacity: 0.85; font-size: 0.85rem; }
+main {
+  max-width: 720px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.card h2 { margin-top: 0; font-size: 1.05rem; }
+label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; }
+input, textarea, select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+button {
+  margin-top: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+button:disabled { background: #9ca3af; cursor: not-allowed; }
+button.secondary { background: #6b7280; }
+.muted { color: var(--color-muted); font-size: 0.9rem; }
+.result-box {
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+  background: #f0f4ff;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.error-box {
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.warning-box {
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: 4px;
+  font-weight: bold;
+}
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+.history-table th, .history-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.history-table th { background: #f0f2f5; }
+.anomaly-row { background: var(--color-danger-bg); color: var(--color-danger); font-weight: bold; }
+.score-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-weight: bold;
+  color: #fff;
+}
+.score-high { background: var(--color-success); }
+.score-mid { background: #9a6700; }
+.score-low { background: var(--color-danger); }
+.elapsed { font-size: 0.8rem; color: var(--color-muted); }
+#qr-canvas { margin-top: 0.75rem; }
+.button-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.file-button {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+}
+.tx-id { font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; white-space: nowrap; }
+.notification-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.notification {
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem;
+  border-left: 4px solid var(--color-success);
+  background: #f3f8f4;
+  border-radius: 4px;
+  animation: notification-in 0.3s ease-out;
+}
+.notification-anomaly {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-weight: bold;
+}
+@keyframes notification-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+textarea[readonly] { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; }
+.file-button.secondary { background: #6b7280; color: #fff; border: none; font-weight: normal; }

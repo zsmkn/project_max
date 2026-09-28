@@ -1,0 +1,16 @@
+{
+  "initialScore": 100,
+  "minScore": 0,
+  "mileageRollbackDeduction": 40,
+  "claimWithoutMaintenanceDeduction": 20,
+  "claimWithoutMaintenanceWindowDays": 30,
+  "duplicatePartDeduction": 30,
+  "residualValue": {
+    "ageCoefficientPerYear": 0.12,
+    "ageCoefficientMin": 0.2,
+    "mileageCoefficientDivisorKm": 400000,
+    "mileageCoefficientMin": 0.5,
+    "integrityCoefficientBase": 0.6,
+    "integrityCoefficientWeight": 0.4
+  }
+}

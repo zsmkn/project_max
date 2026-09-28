@@ -1,0 +1,100 @@
+# 階段 7 效能測試（NFR2）：Hyperledger Caliper 量測各鏈碼函式的 TPS 與延遲。
+#
+# 前提（見 README.md）：
+#   1. network/ 已啟動並部署 chaincode（deployCC.sh）
+#   2. gateway/ 已啟動（npm run dev，供 setup/seedData.mjs 呼叫其內部服務埠）
+#   3. 已執行 `npm run seed` 產生 setup/seedVehicles.json（300 台種子車輛）
+#      與 setup/perfOwnerKey.local.json（測試車主 PQC 私鑰）
+#   4. 已執行 `npm run config` 產生 networkConfig.yaml（依目前網路憑證動態產生）
+#
+# 回合順序刻意固定：initVehicle 使用全新 VIN、不依賴種子資料，可放在任何位置；
+# addMaintenance／recordClaim／submitInspection／transferOwnership／getSummary／
+# getVehicleHistory 皆讀寫同一批 300 台種子車輛；scrapVehicle 會讓車輛終止生命週期
+# （鏈碼拒絕重複報廢），因此必須放在最後一個回合，且 txNumber 不可超過種子池大小。
+#
+# 速率控制皆採 fixed-load（維持固定數量的「未完成交易」，見 CLAUDE.md 的
+# 「不過度設計」：不特別調參數去湊 plan.md §7 #7 的 50 TPS 參考目標，如實記錄
+# 實際量測到的 TPS，未達標不回頭調整數據或參數）。
+test:
+  workers:
+    number: 2
+  rounds:
+    - label: initVehicle
+      description: "InitVehicle（OEM，全新 VIN，無 PQC 驗證，寫入基準對照組）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/initVehicle.js
+
+    - label: addMaintenance
+      description: "AddMaintenance（SVC，含 ML-DSA-65 Dilithium 簽章驗證，BFR5）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/addMaintenance.js
+
+    - label: recordClaim
+      description: "RecordClaim（INS，無 PQC 驗證，與 addMaintenance 對照）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/recordClaim.js
+
+    - label: submitInspection
+      description: "SubmitInspection（APP，觸發 BFR3 評分引擎重算）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/submitInspection.js
+
+    - label: transferOwnership
+      description: "TransferOwnership（REG，觸發 BFR3 評分引擎重算）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/transferOwnership.js
+
+    - label: getSummary
+      description: "GetSummary（查詢，任何組織，單鍵讀取，NFR2 查詢延遲）"
+      txNumber: 300
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 20
+      workload:
+        module: workload/getSummary.js
+
+    - label: getVehicleHistory
+      description: "GetVehicleHistory（查詢，區間查詢，NFR2 查詢延遲）"
+      txNumber: 300
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 20
+      workload:
+        module: workload/getVehicleHistory.js
+
+    - label: scrapVehicle
+      description: "ScrapVehicle（REG，每台種子車輛僅報廢一次；必須是最後一個回合）"
+      txNumber: 150
+      rateControl:
+        type: fixed-load
+        opts:
+          transactionLoad: 8
+      workload:
+        module: workload/scrapVehicle.js

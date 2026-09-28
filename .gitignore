@@ -1,0 +1,80 @@
+# === 機密與環境設定 ===
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# === 本專案：Fabric 憑證、私鑰與網路產生物（含私鑰，絕不可上傳）===
+# 注意：network/organizations/fabric-ca/registerEnroll.sh 是原始碼，須排除在忽略範圍外
+network/organizations/peerOrganizations/
+network/organizations/ordererOrganizations/
+network/organizations/fabric-ca/reg/
+network/organizations/fabric-ca/oem/
+network/organizations/fabric-ca/svc/
+network/organizations/fabric-ca/ins/
+network/organizations/fabric-ca/app/
+network/organizations/fabric-ca/orderer/
+network/channel-artifacts/
+network/system-genesis-block/
+**/wallet/
+pqc/keys/
+*_sk
+*.block
+*.tar.gz
+
+# === 階段 7：Caliper 效能測試產生物（機器相依路徑／測試用私鑰／原始報告）===
+tests/perf/networkConfig.yaml
+tests/perf/setup/seedVehicles.json
+tests/perf/setup/perfOwnerKey.local.json
+tests/perf/reports/
+tests/perf/report.html
+
+# === 作業系統 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === 編輯器 / IDE ===
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# === Claude Code（個人設定不提交）===
+.claude/settings.local.json
+
+# === 日誌與暫存 ===
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# === 建置輸出 ===
+dist/
+build/
+out/
+coverage/
+
+# === Node.js ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# === plan or archive ===
+archive/

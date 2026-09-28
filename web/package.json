@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "web/ 無建置工具；本檔只讓 Node.js 以 ESM 載入 walletCrypto.js 等模組做測試（node --test web/tests/*.test.mjs）"
+}

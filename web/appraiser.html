@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>鑑定師介面｜車輛履歷系統</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>鑑定師介面</h1>
+  <p>第三方鑑定中心（APP）實體複檢，回報里程與檢驗結果（FFR3、FFR4、UC-01）</p>
+</header>
+<main>
+
+  <div class="card">
+    <h2>① 查詢車輛目前紀錄</h2>
+    <label for="vin">VIN</label>
+    <input id="vin" placeholder="車輛識別碼" />
+    <button id="btn-load">查詢目前狀態</button>
+    <div id="current-result"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 提交複檢結果</h2>
+    <label for="mileage">複檢回報里程（公里）</label>
+    <input id="mileage" type="number" min="0" />
+    <label for="findings">檢驗說明</label>
+    <textarea id="findings" rows="3" placeholder="外觀、機件狀況、儀表與實際落差等"></textarea>
+
+    <div id="rollback-warning" class="warning-box" style="display:none;">
+      ⚠ 回報里程低於本車目前紀錄的里程，疑似里程倒退（里程表回調）。
+      依系統設計，交易仍會成功送出並自動扣分、記錄異常上鏈（不會被拒絕，見 UC-01）。
+      請確認您已核實現場狀況後再送出。
+      <label style="font-weight: normal; margin-top: 0.5rem;">
+        <input type="checkbox" id="confirm-rollback" style="width:auto; display:inline;" />
+        我已核實現場狀況，確認回報里程無誤，仍要送出
+      </label>
+    </div>
+
+    <button id="btn-submit">送出複檢結果</button>
+    <div id="submit-result"></div>
+  </div>
+
+</main>
+<script src="api.js"></script>
+<script>
+function showError(el, err) {
+  el.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+}
+
+let currentMileage = null;
+
+async function loadCurrent() {
+  const vin = document.getElementById('vin').value.trim();
+  const out = document.getElementById('current-result');
+  if (!vin) { showError(out, new Error('請輸入 VIN')); return; }
+  try {
+    const { data, elapsedMs } = await api.getSummary(vin);
+    currentMileage = data.mileage;
+    out.innerHTML = `<div class="result-box">目前紀錄里程：<strong>${data.mileage.toLocaleString()} km</strong>
+誠信分數：${data.integrityScore}　狀態：${data.status}
+<span class="elapsed">（${elapsedMs} ms）</span></div>`;
+    evaluateRollback();
+  } catch (err) {
+    currentMileage = null;
+    showError(out, err);
+  }
+}
+
+document.getElementById('btn-load').addEventListener('click', loadCurrent);
+
+function evaluateRollback() {
+  const mileageInput = document.getElementById('mileage').value;
+  const warning = document.getElementById('rollback-warning');
+  const submitBtn = document.getElementById('btn-submit');
+  const confirmBox = document.getElementById('confirm-rollback');
+  if (currentMileage === null || mileageInput === '') {
+    warning.style.display = 'none';
+    submitBtn.disabled = false;
+    return;
+  }
+  const mileage = Number(mileageInput);
+  const isRollback = mileage < currentMileage;
+  warning.style.display = isRollback ? 'block' : 'none';
+  if (isRollback) {
+    // FFR4：里程倒退時紅字警示並鎖定送出，須勾選確認才能解鎖。
+    submitBtn.disabled = !confirmBox.checked;
+  } else {
+    submitBtn.disabled = false;
+  }
+}
+
+document.getElementById('mileage').addEventListener('input', evaluateRollback);
+document.getElementById('confirm-rollback').addEventListener('change', evaluateRollback);
+
+document.getElementById('btn-submit').addEventListener('click', async () => {
+  const vin = document.getElementById('vin').value.trim();
+  const mileage = Number(document.getElementById('mileage').value);
+  const findings = document.getElementById('findings').value.trim();
+  const out = document.getElementById('submit-result');
+  if (!vin || !findings || Number.isNaN(mileage)) {
+    showError(out, new Error('請完整填寫 VIN、里程與檢驗說明'));
+    return;
+  }
+  try {
+    const { elapsedMs: submitMs } = await api.submitInspection(vin, { mileage, findings });
+    const [{ data: summary }, { data: history }] = await Promise.all([api.getSummary(vin), api.getHistory(vin)]);
+    const newAnomaly = history.filter((e) => e.type === 'ANOMALY').slice(-1)[0];
+    const anomalyNotice = newAnomaly
+      ? `<div class="warning-box">⚠ 已偵測到異常：${escapeHtml(newAnomaly.anomalyType)}
+（${escapeHtml(newAnomaly.description)}，分數變動 ${newAnomaly.scoreDelta}）</div>`
+      : '';
+    out.innerHTML = `<div class="result-box">複檢已送出並成功上鏈
+<span class="elapsed">（${submitMs} ms）</span></div>
+${anomalyNotice}
+<p>目前誠信分數：<strong>${summary.integrityScore}</strong>　里程：${summary.mileage.toLocaleString()} km</p>
+${renderHistoryTable(history)}`;
+    currentMileage = summary.mileage;
+    document.getElementById('rollback-warning').style.display = 'none';
+    document.getElementById('confirm-rollback').checked = false;
+  } catch (err) {
+    showError(out, err);
+  }
+});
+</script>
+</body>
+</html>

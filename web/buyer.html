@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>買家介面｜車輛履歷系統</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>買家介面</h1>
+  <p>掃描車主提供的 QR Code，在自己的瀏覽器內用鏈上公鑰驗證車主授權（UC-02、plan_dApp.md D2，經 Kyber TLS 連線 Gateway）</p>
+</header>
+<main>
+
+  <div class="card">
+    <h2>① 提供查詢授權</h2>
+    <p class="muted">用手機相機掃描 QR Code 會直接開啟本頁；也可以上傳 QR Code 圖片，或貼上車主提供的授權內容（JSON）。</p>
+    <label for="qr-image">上傳 QR Code 圖片</label>
+    <input id="qr-image" type="file" accept="image/*" />
+    <label for="qr-payload">或貼上授權內容（JSON）</label>
+    <textarea id="qr-payload" rows="3" placeholder='{"vin":"...","ownerIdentity":"...","expiresAt":"...","signatureHex":"..."}'></textarea>
+    <button id="btn-verify">在瀏覽器內驗證並查詢履歷</button>
+    <div id="verify-result"></div>
+  </div>
+
+  <div class="card" id="history-card" style="display:none;">
+    <h2>② 車輛履歷（FFR1、IIR2）</h2>
+    <div id="summary-result"></div>
+    <p class="muted">每筆紀錄都附交易編號，可向任一聯盟組織的 peer 交叉查證，不必只相信這台 Gateway。</p>
+    <div id="history-result"></div>
+  </div>
+
+</main>
+<script src="api.js"></script>
+<script type="module">
+import { jsQR } from './vendor/jsqr-1.4.0.js';
+import { queryAuthorizationId } from './shared/authMessages.js';
+import { verifyQueryAuthorization } from './walletCrypto.js';
+
+const $ = (id) => document.getElementById(id);
+
+function showError(el, err) {
+  el.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+}
+
+function scoreClass(score) {
+  if (score >= 80) return 'score-high';
+  if (score >= 50) return 'score-mid';
+  return 'score-low';
+}
+
+// 讀取 QR Code 內容：新版是 buyer.html#auth=<內容定址 ID> 的網址，也相容直接貼上的 JSON。
+async function resolveAuthorization(text) {
+  const match = text.match(/#auth=([0-9a-f]{64})/i) || text.match(/^([0-9a-f]{64})$/i);
+  if (!match) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('授權內容不是合法的 JSON 或 QR 網址，請確認格式');
+    }
+  }
+  const id = match[1].toLowerCase();
+  const { data } = await api.fetchQueryAuthorization(id);
+  // Gateway 只是轉交者：重算內容雜湊，與 QR 上的 ID 不符代表內容被動過。
+  if ((await queryAuthorizationId(data)) !== id) {
+    throw new Error('取回的授權內容與 QR Code 不符（可能遭竄改），拒絕使用');
+  }
+  return data;
+}
+
+$('qr-image').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const out = $('verify-result');
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const decoded = jsQR(imageData.data, canvas.width, canvas.height);
+  if (!decoded) {
+    showError(out, new Error('無法從圖片解析 QR Code，請改用手動貼上'));
+    return;
+  }
+  $('qr-payload').value = decoded.data;
+  out.innerHTML = '<div class="result-box">已從圖片解析出授權內容，請按「在瀏覽器內驗證並查詢履歷」</div>';
+});
+
+async function verifyAndLoad() {
+  const out = $('verify-result');
+  $('history-card').style.display = 'none';
+  const startedAt = performance.now();
+  try {
+    const payload = await resolveAuthorization($('qr-payload').value.trim());
+    if (!payload || !payload.vin || !payload.ownerIdentity) {
+      throw new Error('授權內容缺少必要欄位（vin、ownerIdentity、expiresAt、signatureHex）');
+    }
+    // 只向 Gateway 取「鏈上原始資料」（公鑰、車主雜湊、履歷），驗章與比對都在瀏覽器內完成，
+    // 不呼叫 Gateway 的 verify 端點（plan_dApp.md D2）。
+    const [onChainKey, { data: summary }, { data: history }] = await Promise.all([
+      api.getOnChainPQCKey(payload.ownerIdentity),
+      api.getSummary(payload.vin),
+      api.getHistory(payload.vin),
+    ]);
+    const result = verifyQueryAuthorization({ payload, onChainKey, vehicleOwnerHash: summary.ownerHash });
+    if (!result.valid) {
+      throw new Error(`查詢授權無效（瀏覽器端驗證）：${result.reason}`);
+    }
+    const totalMs = Math.round(performance.now() - startedAt);
+    out.innerHTML = `<div class="result-box">✅ 已在你的瀏覽器內以鏈上公鑰（第 ${onChainKey.version} 版）驗證車主簽章，
+授權有效至 ${escapeHtml(payload.expiresAt)}（UC-02 前置條件）<span class="elapsed">（${totalMs} ms）</span></div>`;
+
+    $('summary-result').innerHTML = `
+      <p>VIN：<strong>${escapeHtml(summary.vin)}</strong>　出廠年份：${summary.manufactureYear}</p>
+      <p>誠信分數：<span class="score-badge ${scoreClass(summary.integrityScore)}">${summary.integrityScore}</span>
+         　估計殘值：<strong>${summary.residualValue.toLocaleString()}</strong>　目前里程：${summary.mileage.toLocaleString()} km</p>
+      <p class="elapsed">驗證＋查詢總耗時 ${totalMs} ms（NFR2 目標：< 1000 ms）</p>
+    `;
+    $('history-result').innerHTML = renderHistoryTable(history);
+    $('history-card').style.display = 'block';
+  } catch (err) {
+    showError(out, err);
+  }
+}
+
+$('btn-verify').addEventListener('click', verifyAndLoad);
+
+// 手機相機掃描 QR 後直接開啟 buyer.html#auth=…，自動帶入並驗證。
+if (window.location.hash.startsWith('#auth=')) {
+  $('qr-payload').value = window.location.href;
+  verifyAndLoad();
+}
+</script>
+</body>
+</html>

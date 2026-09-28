@@ -1,0 +1,71 @@
+# 五個業務組織各自的 CouchDB 狀態庫。
+
+networks:
+  vehiclenet:
+    name: vehiclenet
+
+services:
+  couchdb-reg:
+    container_name: couchdb-reg
+    image: couchdb:3.4.2
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984"
+    networks:
+      - vehiclenet
+
+  couchdb-oem:
+    container_name: couchdb-oem
+    image: couchdb:3.4.2
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "6984:5984"
+    networks:
+      - vehiclenet
+
+  couchdb-svc:
+    container_name: couchdb-svc
+    image: couchdb:3.4.2
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "7984:5984"
+    networks:
+      - vehiclenet
+
+  couchdb-ins:
+    container_name: couchdb-ins
+    image: couchdb:3.4.2
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "8984:5984"
+    networks:
+      - vehiclenet
+
+  couchdb-app:
+    container_name: couchdb-app
+    image: couchdb:3.4.2
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "9984:5984"
+    networks:
+      - vehiclenet

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>dApp 瀏覽器冒煙測試</title>
+<style>
+  iframe { width: 100%; height: 600px; border: 1px solid #ccc; }
+  #steps li.fail { color: #d1242f; }
+</style>
+</head>
+<body>
+<!--
+  plan_dApp.md D0–D3 的真實瀏覽器冒煙測試。經 Gateway 同源開啟：
+    https://localhost:8443/tests/browser-smoke.html
+  以同源 iframe 操作「真正的」owner.html／buyer.html（填欄位、按按鈕、讀結果），驗證：
+  同源呼叫 Gateway（D0）、瀏覽器產生金鑰／IndexedDB／簽章上鏈（D1）、QR 內容定址與買家
+  瀏覽器端驗章（D2）、EventSource 即時扣分通知（D3）。結果寫入 #result（JSON），
+  並寫入分頁標題，供 headless 瀏覽器經 DevTools /json/list 擷取（見 docs/dapp.md）。
+  需要 network／gateway 已啟動；會在鏈上建立一台測試車（VIN 前綴 WEB）。
+-->
+<h1>dApp 瀏覽器冒煙測試</h1>
+<ol id="steps"></ol>
+<pre id="result">running</pre>
+<iframe id="owner" title="owner"></iframe>
+<iframe id="buyer" title="buyer"></iframe>
+<script type="module">
+import { jsQR } from '../vendor/jsqr-1.4.0.js';
+
+const steps = [];
+const vin = `WEB${Date.now().toString(36).toUpperCase()}`;
+const identity = `owner-${vin}`;
+
+function log(name, ok, detail = '') {
+  steps.push({ name, ok, detail });
+  const li = document.createElement('li');
+  li.textContent = `${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`;
+  if (!ok) li.className = 'fail';
+  document.getElementById('steps').append(li);
+}
+
+function loadFrame(id, url) {
+  return new Promise((resolve) => {
+    const frame = document.getElementById(id);
+    frame.onload = () => resolve(frame.contentWindow);
+    frame.src = url;
+  });
+}
+
+async function waitFor(check, timeoutMs, label) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = check();
+    if (value) return value;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`逾時：${label}`);
+}
+
+async function postJson(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`${path} ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+function setValue(win, id, value) {
+  win.document.getElementById(id).value = value;
+}
+
+function text(win, id) {
+  return win.document.getElementById(id).textContent;
+}
+
+async function run() {
+  // D0：同源呼叫 Gateway（不經 CORS）。
+  await postJson('/api/vehicles', {
+    vin, engineSerial: `ENG-${vin}`, transmissionSerial: `TRX-${vin}`,
+    manufactureYear: 2021, msrpAmount: 700000, ownerHash: identity,
+  });
+  log('D0 同源呼叫 Gateway 建立測試車', true, vin);
+
+  const owner = await loadFrame('owner', '/owner.html');
+  // D1：瀏覽器內產生金鑰並登記（持有證明）。
+  setValue(owner, 'owner-identity', identity);
+  owner.document.getElementById('btn-register-key').click();
+  await waitFor(() => text(owner, 'register-key-result'), 20000, '登記金鑰');
+  log('D1 瀏覽器產生金鑰並登記上鏈', /已登記/.test(text(owner, 'register-key-result')), text(owner, 'register-key-result').slice(0, 40));
+
+  owner.document.getElementById('btn-wallet-status').click();
+  await waitFor(() => /一致|不一致/.test(text(owner, 'register-key-result')), 10000, '錢包狀態');
+  log('D1 IndexedDB 私鑰與鏈上公鑰一致', /✅/.test(text(owner, 'register-key-result')));
+
+  // D1：瀏覽器簽署保養授權 → 模擬維修廠送出上鏈。
+  setValue(owner, 'maint-vin', vin);
+  setValue(owner, 'maint-service-type', 'OIL_CHANGE');
+  setValue(owner, 'maint-mileage', '50000');
+  setValue(owner, 'maint-description', '瀏覽器冒煙測試保養');
+  owner.document.getElementById('btn-authorize-maintenance').click();
+  await waitFor(() => !owner.document.getElementById('btn-submit-maintenance').disabled, 10000, '簽署保養授權');
+  owner.document.getElementById('btn-submit-maintenance').click();
+  await waitFor(() => /上鏈成功|error/.test(owner.document.getElementById('authorize-result').innerHTML), 20000, '保養上鏈');
+  log('D1 瀏覽器簽章的保養授權上鏈', /上鏈成功/.test(text(owner, 'authorize-result')), text(owner, 'authorize-result').slice(0, 40));
+
+  // D3：車主頁 EventSource 追蹤，鑑定師送出里程倒退複檢後應跳出扣分通知。
+  setValue(owner, 'history-vin', vin);
+  owner.document.getElementById('btn-watch').click();
+  await waitFor(() => /正在即時追蹤/.test(text(owner, 'watch-status')), 10000, 'SSE 連線');
+  const submittedAt = performance.now();
+  await postJson(`/api/vehicles/${vin}/inspections`, { mileage: 30000, findings: '瀏覽器冒煙測試：里程倒退' });
+  await waitFor(() => /異常扣分/.test(text(owner, 'notifications')), 15000, '扣分通知');
+  const notifyMs = Math.round(performance.now() - submittedAt);
+  log('D3 車主頁即時收到扣 40 分通知', /扣 40 分/.test(text(owner, 'notifications')), `${notifyMs} ms`);
+
+  // D2：車主產生 QR（內容定址），買家頁從 #auth= 自動取回並在瀏覽器內驗章。
+  setValue(owner, 'qr-vin', vin);
+  owner.document.getElementById('btn-generate-qr').click();
+  const link = await waitFor(() => owner.document.querySelector('#qr-result a')?.href, 15000, '產生 QR');
+  // 用買家頁同一套 jsQR 解碼實際繪出的 QR，確認掃得出買家網址。
+  const canvas = owner.document.getElementById('qr-canvas');
+  const image = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  const decoded = jsQR(image.data, canvas.width, canvas.height)?.data;
+  log('D2 QR Code 可解碼為買家網址（內容定址 ID）', decoded === link && /#auth=[0-9a-f]{64}$/.test(link), link.slice(-20));
+
+  const buyer = await loadFrame('buyer', link.replace(location.origin, ''));
+  await waitFor(() => /✅|error/.test(buyer.document.getElementById('verify-result').innerHTML), 15000, '買家驗證');
+  log('D2 買家瀏覽器以鏈上公鑰驗章通過', /✅/.test(text(buyer, 'verify-result')), text(buyer, 'verify-result').slice(0, 30));
+  const txCells = buyer.document.querySelectorAll('.tx-id');
+  log('D2 履歷顯示交易編號', txCells.length > 0 && /^[0-9a-f]{64}$/.test(txCells[0].title), `${txCells.length} 筆`);
+
+  // D2：竄改（延長期限）後，瀏覽器端直接判定失敗。
+  const authorization = JSON.parse(owner.document.querySelector('#qr-result textarea').value);
+  authorization.expiresAt = new Date(Date.now() + 3600_000).toISOString();
+  setValue(buyer, 'qr-payload', JSON.stringify(authorization));
+  buyer.document.getElementById('btn-verify').click();
+  await waitFor(() => /error-box/.test(buyer.document.getElementById('verify-result').innerHTML), 15000, '竄改驗證');
+  log('D2 竄改後瀏覽器端驗證失敗', /簽章驗證失敗/.test(text(buyer, 'verify-result')), text(buyer, 'verify-result').slice(0, 40));
+}
+
+run()
+  .catch((err) => log('未預期錯誤', false, err.message))
+  .finally(() => {
+    const passed = steps.every((s) => s.ok);
+    const summary = JSON.stringify({ passed, vin, userAgent: navigator.userAgent, steps });
+    document.getElementById('result').textContent = summary;
+    // headless 瀏覽器可從 DevTools 的 /json/list 讀到分頁標題，不需要 WebSocket 用戶端。
+    document.title = `${passed ? 'SMOKE-PASS' : 'SMOKE-FAIL'} ${summary}`;
+  });
+</script>
+</body>
+</html>

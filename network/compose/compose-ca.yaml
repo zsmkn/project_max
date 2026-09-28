@@ -1,0 +1,129 @@
+# 六個 Fabric CA：五個業務組織（REG/OEM/SVC/INS/APP）+ 一個排序組織。
+# 映像檔版本明確鎖定 1.5.9（不可用 latest：本機驗證過 latest 標籤實際指向
+# Fabric CA 對應的 3.x 系列，與 docs/stage0-validation.md 驗證過的 2.5.9 網路不相容）。
+
+networks:
+  vehiclenet:
+    name: vehiclenet
+
+services:
+
+  ca-reg:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-reg
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:17054
+    ports:
+      - "7054:7054"
+      - "17054:17054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/reg:/etc/hyperledger/fabric-ca-server
+    container_name: ca-reg
+    networks:
+      - vehiclenet
+
+  ca-oem:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-oem
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=8054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:18054
+    ports:
+      - "8054:8054"
+      - "18054:18054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/oem:/etc/hyperledger/fabric-ca-server
+    container_name: ca-oem
+    networks:
+      - vehiclenet
+
+  ca-svc:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-svc
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=9054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:19054
+    ports:
+      - "9054:9054"
+      - "19054:19054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/svc:/etc/hyperledger/fabric-ca-server
+    container_name: ca-svc
+    networks:
+      - vehiclenet
+
+  ca-ins:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-ins
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=10054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:20054
+    ports:
+      - "10054:10054"
+      - "20054:20054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/ins:/etc/hyperledger/fabric-ca-server
+    container_name: ca-ins
+    networks:
+      - vehiclenet
+
+  ca-app:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-app
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=11054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:21054
+    ports:
+      - "11054:11054"
+      - "21054:21054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/app:/etc/hyperledger/fabric-ca-server
+    container_name: ca-app
+    networks:
+      - vehiclenet
+
+  ca-orderer:
+    image: hyperledger/fabric-ca:1.5.9
+    labels:
+      service: hyperledger-fabric
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-orderer
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=6054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:16054
+    ports:
+      - "6054:6054"
+      - "16054:16054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/fabric-ca/orderer:/etc/hyperledger/fabric-ca-server
+    container_name: ca-orderer
+    networks:
+      - vehiclenet

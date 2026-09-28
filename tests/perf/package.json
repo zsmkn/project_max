@@ -1,0 +1,23 @@
+{
+  "name": "vehiclenet-perf-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "階段 7（NFR2）：Hyperledger Caliper 效能測試工作區。與 gateway/、tests/e2e/ 分開管理，因為 Caliper 本身依賴龐大，且此處刻意繞過 Gateway REST 層、直接透過 Fabric Gateway SDK 對鏈量測交易層級的 TPS 與查詢延遲。",
+  "scripts": {
+    "bind": "caliper bind --caliper-bind-sut fabric:2.5",
+    "seed": "node setup/seedData.mjs",
+    "config": "node generateNetworkConfig.mjs",
+    "benchmark": "caliper launch manager --caliper-workspace . --caliper-networkconfig networkConfig.yaml --caliper-benchconfig benchmarkConfig.yaml --caliper-flow-only-test"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.1",
+    "@hyperledger/fabric-gateway": "^1.7.1",
+    "@noble/post-quantum": "^0.7.1"
+  },
+  "devDependencies": {
+    "@hyperledger/caliper-cli": "0.7.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
