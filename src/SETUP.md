@@ -17,6 +17,11 @@
 
 版本務必照抄，差一個版號就可能撞上 `docs/stage0-validation.md` 記錄過的相容性問題。
 
+> **一鍵安裝**：裝好 WSL2 Ubuntu 22.04（§0.1 第一步）後，在 repo 根目錄執行
+> `./setup-env.sh`（含 Go），即可自動完成 §0.2–§0.5 與 mocks 的
+> Python 套件，已裝好的元件會略過。§0.7 的 `.wslconfig` 屬 Windows 端設定，仍需手動處理。
+> 以下為腳本所做事情的手動版本。
+
 | 元件 | 版本 | 為什麼卡在這個版本 |
 | --- | --- | --- |
 | WSL2 | Ubuntu 22.04 LTS | 需求書指定 |
@@ -99,6 +104,11 @@ docker run --rm hyperledger/fabric-ccenv:2.5.9 go version
 ```
 
 ### 0.5 Go、Node.js
+
+> **Go 是部署必備，不只是跑單元測試**：`peer lifecycle chaincode package --lang golang`
+> 會在本機執行 `go` 判斷 module 根目錄，沒裝會出現
+> `failed to normalize chaincode path: ... exec: "go": executable file not found in $PATH`。
+> 實際編譯仍在 `fabric-ccenv:2.5.9` 容器內進行。
 
 ```bash
 # Go（官方 tarball；只要落在 1.22.x 以上皆可，本機用 1.27.1 開發）
@@ -381,6 +391,9 @@ npm run benchmark
 
 ## 9. 完整啟動順序（從零開始，單一終端機示範）
 
+§0 環境裝好後，可直接用 repo 根目錄的 `./deploy.sh up --e2e` 一鍵完成本節所有步驟
+（`./deploy.sh status`／`stop`／`down` 管理；用法見腳本開頭註解）。以下為等效的手動指令：
+
 ```bash
 cd network && ./network.sh up && ./network.sh createChannel && bash scripts/deployCC.sh && cd ..
 
@@ -413,6 +426,8 @@ cd network && ./network.sh down   # 關閉並清除所有容器、volume、憑�
 | `sudo` 指令卡住不動 | 非互動 shell 等密碼輸入 | §0.1，設定 `NOPASSWD` |
 | chaincode install 失敗，`write unix @->/run/docker.sock: broken pipe` | Docker Engine 版本太新（26+），legacy build API 不相容 | §0.3，降級並 `apt-mark hold` 在 25.0.5 |
 | chaincode 在 ccenv 容器內建置失敗，Go 版本錯誤 | CIRCL 版本 > v1.6.3 要求 Go 1.25+，但 ccenv 只有 Go 1.22.4 | `go.mod` 鎖定 `circl v1.6.3` 與 `go 1.22.0`，勿任意升級 CIRCL |
+| 部署鏈碼時 `failed to normalize chaincode path: ... exec: "go": executable file not found` | 本機沒有 Go（或剛裝好但目前終端機的 PATH 還沒有 `/usr/local/go/bin`） | 執行 `./setup-env.sh` 安裝 Go，或 `export PATH=$PATH:/usr/local/go/bin` 後重跑 `./deploy.sh up` |
+| peer 安裝鏈碼時自動拉了非 2.5.9 的 ccenv／baseos | `core.yaml` 預設 `$(TWO_DIGIT_VERSION)` 會解析成浮動標籤 `fabric-ccenv:2.5` | `network/peercfg/core.yaml` 已鎖定 `fabric-ccenv:2.5.9`／`fabric-baseos:2.5.9`，勿改回 |
 | Docker 映像檔行為與預期不符 | 用了 `latest` 標籤，實際解析到 Fabric 3.x | 一律用明確版本號 `2.5.9`／`1.5.9` |
 | 長時間沒操作，容器全部消失（`docker ps` 變空） | WSL2 閒置逾時關閉整個發行版（`vmIdleTimeout=-1` 不保證生效） | §0.7；需要 Docker 存活的多步驟操作，盡量放進同一段 shell 連續執行完，減少閒置空檔 |
 | Python／curl 呼叫 Gateway 8443 埠 TLS 握手失敗 | 公開埠只接受 `X25519MLKEM768`，系統 OpenSSL 版本不支援 | 改呼叫 Gateway 內部服務埠 `127.0.0.1:8080`（見 §3、`mocks/README.md`） |

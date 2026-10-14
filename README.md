@@ -14,15 +14,23 @@
 ## 快速開始
 
 ```bash
+./setup-env.sh         # 新機器先執行一次：安裝 Docker 25.0.5、Fabric 2.5.9、Node.js 22 等（WSL2 Ubuntu 22.04 內）
+./deploy.sh up --e2e   # 一鍵部署網路、鏈碼、Gateway、模擬服務並跑端到端測試（./deploy.sh down 清除）
+```
+
+或手動逐步執行：
+
+```bash
 cd network && ./network.sh up && ./network.sh createChannel && bash scripts/deployCC.sh
 cd ../gateway && npm install && npm run dev      # 首次需另外產生自簽憑證
 make e2e                                          # 四個使用案例情境全過即部署成功
 ```
 
-完整步驟、前置需求與常見問題見下列兩份文件：
+名詞說明、完整步驟、前置需求與常見問題見下列文件：
 
 | 文件 | 適合什麼時候看 |
 | --- | --- |
+| [describe.md](describe.md) | 看不懂專有名詞時：白話說明各項核心技術、系統架構與名詞速查表 |
 | [quick_start.md](quick_start.md) | 環境已備妥，想在 10 分鐘內把整套系統跑起來 |
 | [src/SETUP.md](src/SETUP.md) | 新機器從零安裝、各模組的完整指令、lint 與效能測試、環境陷阱速查表 |
 

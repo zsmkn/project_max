@@ -568,7 +568,10 @@ chaincode:
         name:
 
     # Generic builder environment, suitable for most chaincode types
-    builder: $(DOCKER_NS)/fabric-ccenv:$(TWO_DIGIT_VERSION)
+    # 明確鎖定 2.5.9：預設的 $(TWO_DIGIT_VERSION) 會解析成浮動標籤 fabric-ccenv:2.5，
+    # 本機沒有該標籤時 peer 會從 Docker Hub 拉最新的 2.5.x（內建 Go 版本可能不同）。
+    # 下方 golang runtime 的 fabric-baseos 同理。
+    builder: $(DOCKER_NS)/fabric-ccenv:2.5.9
 
     # Enables/disables force pulling of the base docker images (listed below)
     # during user chaincode instantiation.
@@ -577,7 +580,7 @@ chaincode:
 
     golang:
         # golang will never need more than baseos
-        runtime: $(DOCKER_NS)/fabric-baseos:$(TWO_DIGIT_VERSION)
+        runtime: $(DOCKER_NS)/fabric-baseos:2.5.9
 
         # whether or not golang chaincode should be linked dynamically
         dynamicLink: false

@@ -47,6 +47,7 @@ desktop.ini
 .claude/settings.local.json
 
 # === 日誌與暫存 ===
+.run/
 *.log
 logs/
 tmp/
@@ -78,3 +79,4 @@ venv/
 
 # === plan or archive ===
 archive/
+CLAUDE.md

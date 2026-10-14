@@ -1,11 +1,30 @@
 # 快速開始
 
 從一台**已裝好環境**的機器啟動整套系統、確認能跑，約 10 分鐘。
-環境還沒裝好（Docker／Fabric／Go／Node／Python）請先做 [src/SETUP.md](src/SETUP.md) §0，
+環境還沒裝好（Docker／Fabric／Go／Node／Python）請先在 WSL 內執行 `./setup-env.sh`
+一鍵安裝，或照 [src/SETUP.md](src/SETUP.md) §0 手動安裝，
 那份也收錄了完整的指令、版本鎖定原因與環境陷阱速查表。
 
 所有指令都在 **WSL2 Ubuntu 22.04** 內執行。專案放在 Windows 檔案系統（`/mnt/c/...`）沒問題，
 但 Docker、Fabric 二進位檔、Go、Node.js 必須裝在 WSL 內。
+
+## 一鍵部署（推薦）
+
+下面 §0–§5 的步驟已整合成 repo 根目錄的 `deploy.sh`，會自動做環境自檢、略過已完成的
+步驟，並把 Gateway 與兩個模擬服務放到背景執行（PID 與日誌寫在 `.run/`）：
+
+```bash
+./deploy.sh up --e2e   # 部署整套系統並跑端到端測試；省略 --e2e 則只部署
+./deploy.sh status     # 查看各元件狀態
+./deploy.sh stop       # 停止 Gateway／mocks，保留 Fabric 網路與帳本
+./deploy.sh down       # 停止所有服務並清除整個網路（容器、volume、憑證）
+```
+
+網頁直接開 `https://localhost:8443/owner.html`（`buyer.html`／`appraiser.html`），由 Gateway
+同源提供。鏈碼已提交過時腳本會略過部署；改過 `chaincode/vehicle/` 需依
+[src/SETUP.md](src/SETUP.md) §1 手動升級 `CC_VERSION`／`CC_SEQUENCE`。
+
+想逐步手動操作或排查問題時，再照下列步驟做。
 
 ## 0. 三十秒環境自檢
 

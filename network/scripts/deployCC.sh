@@ -24,6 +24,13 @@ CC_ENDORSEMENT_POLICY="OutOf(2, 'REGMSP.member','OEMMSP.member','SVCMSP.member',
 PACKAGE_FILE="${NETWORK_HOME}/channel-artifacts/${CC_NAME}.tar.gz"
 
 packageChaincode() {
+  # --lang golang 會在本機執行 go 判斷 module 根目錄，缺 go 時錯誤訊息只有難懂的
+  # "failed to normalize chaincode path"，先檢查並給出解法。實際編譯仍在 ccenv 容器內。
+  if ! command -v go >/dev/null 2>&1 && [ -x /usr/local/go/bin/go ]; then
+    export PATH="${PATH}:/usr/local/go/bin"
+  fi
+  command -v go >/dev/null 2>&1 \
+    || fatalln "找不到 go：封裝 Go 鏈碼需要本機 Go（執行 ./setup-env.sh 安裝，見 src/SETUP.md §0.5）"
   infoln "封裝鏈碼（來源：${CC_SRC_PATH}）"
   peer lifecycle chaincode package "${PACKAGE_FILE}" \
     --path "${CC_SRC_PATH}" --lang golang --label "${CC_LABEL}"
